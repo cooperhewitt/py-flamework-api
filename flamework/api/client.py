@@ -47,6 +47,29 @@ class OAuth2:
 
         return data
 
+    def execute_method_paginated(self, method, kwargs, cb, encode=encode_urlencode):
+
+        pages = None
+        page = 1
+
+        while not pages or page <= pages:
+
+            kwargs['page'] = 1
+            rsp = self.execute_method(method, kwargs, encode)
+
+            if not cb(rsp):
+                logging.warning("execute_method_paginated callback did not return True, halting iteration")
+                break
+
+            if not pages:
+                pages = rsp.get('pages', None)
+
+            if not pages:
+                logging.error("can not determine pagination information")
+                break
+
+            page += 1
+        
 if __name__ == '__main__':
 
     import sys
