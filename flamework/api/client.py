@@ -1,4 +1,5 @@
 import urllib
+import urlparse
 import httplib
 import base64
 import json
@@ -17,13 +18,17 @@ class OAuth2:
 
         logging.debug("setup API to use %s%s" % (self.hostname, self.endpoint))
 
+    def set_auth(self, kwargs):
+        kwargs["access_token"] = self.access_token
+        
     def execute_method(self, method, kwargs, encode=encode_urlencode):
 
         logging.debug("calling %s with args %s" % (method, kwargs))
 
         kwargs['method'] = method
-        kwargs['access_token'] = self.access_token
 
+        self.set_auth(kwargs)
+        
         (headers, body) = encode(kwargs)
 
         url = self.endpoint
@@ -49,27 +54,44 @@ class OAuth2:
 
     def execute_method_paginated(self, method, kwargs, cb, encode=encode_urlencode):
 
-        pages = None
-        page = 1
-
-        while not pages or page <= pages:
-
-            kwargs['page'] = 1
+        while True:
+            
             rsp = self.execute_method(method, kwargs, encode)
 
             if not cb(rsp):
                 logging.warning("execute_method_paginated callback did not return True, halting iteration")
                 break
 
-            if not pages:
+            # this is the old way and is here for backwards
+            # compatibility (20170302/thisisaaronland)
+            
+            if not rsp.has_key('next_query'):
+
                 pages = rsp.get('pages', None)
+                page = rsp.get('page', None)
 
-            if not pages:
-                logging.error("can not determine pagination information")
+                if page == pages:
+                    break
+
+                kwargs['page'] = page + 1
+                continue
+
+            # this is the new shiny
+            # (20170302/thisisaaronland)
+            
+            next_query = rsp.get('next_query', None)
+
+            if not next_query:
                 break
+            
+            tmp = urlparse.parse_qs(next_query)
 
-            page += 1
-        
+            # sigh...
+            
+            for k, v in tmp.items():
+                kwargs[k] = v[0]
+
+            
 if __name__ == '__main__':
 
     import sys
